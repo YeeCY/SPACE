@@ -151,7 +151,8 @@ class SpaceBg(nn.Module):
         # Initial h and c. This is h_1 and c_1 in the paper
         h = self.rnn_mask_h_prior.expand(B, arch.rnn_mask_prior_hidden_dim)
         c = self.rnn_mask_c_prior.expand(B, arch.rnn_mask_prior_hidden_dim)
-        
+
+        # computer KLs
         for i in range(arch.K):
             # Compute prior distribution over z_masks
             z_mask_loc_prior, z_mask_scale_prior = self.predict_mask_prior(h)

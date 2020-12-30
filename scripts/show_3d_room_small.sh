@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/usr/bin/envs bash
 cd src && \
 python main.py --task show --config 'configs/3d_room_small.yaml' \
   resume True resume_ckpt '../pretrained/3d_room_small.pth' device $1 \

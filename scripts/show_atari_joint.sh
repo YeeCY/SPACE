@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/usr/bin/envs bash
 cd src && \
 python main.py --task show --config 'configs/atari_joint.yaml' \
   resume True resume_ckpt '../pretrained/atari_joint.pth' device $1 \

@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/usr/bin/envs bash
 cd src && \
 python main.py --task show --config 'configs/atari_spaceinvaders.yaml' \
   resume True resume_ckpt '../pretrained/atari_spaceinvaders.pth' device $1 \

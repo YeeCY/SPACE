@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/usr/bin/envs bash
 if [ ! -d scripts ]; then
   echo "Please run this script from the project root"
   exit

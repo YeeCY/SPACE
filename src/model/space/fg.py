@@ -78,8 +78,8 @@ class SpaceFg(nn.Module):
                                                   arch.z_pres_start_step, arch.z_pres_end_step,
                                                   arch.z_pres_start_value, arch.z_pres_end_value)
         self.prior_scale_mean_new = linear_annealing(self.prior_z_pres_prob.device, global_step,
-                                                arch.z_scale_mean_start_step, arch.z_scale_mean_end_step,
-                                                arch.z_scale_mean_start_value, arch.z_scale_mean_end_value)
+                                                     arch.z_scale_mean_start_step, arch.z_scale_mean_end_step,
+                                                     arch.z_scale_mean_start_value, arch.z_scale_mean_end_value)
         self.tau = linear_annealing(self.tau.device, global_step,
                                     arch.tau_start_step, arch.tau_end_step,
                                     arch.tau_start_value, arch.tau_end_value)
@@ -119,7 +119,7 @@ class SpaceFg(nn.Module):
         
         # Decode z_what into small reconstructed glimpses
         # All (B*G*G, 3, H, W)
-        o_att, alpha_att = self.glimpse_dec(z_what)
+        o_att, alpha_att = self.glimpse_dec(z_what)  # (B * G * G, 3, 32, 32), (B * G * G, 1, 32, 32)
         # z_pres: (B, G*G, 1) -> (B*G*G, 1, 1, 1)
         alpha_att_hat = alpha_att * z_pres.view(-1, 1, 1, 1)
         # (B*G*G, 3, H, W)
@@ -127,7 +127,7 @@ class SpaceFg(nn.Module):
         
         # Compute pixel-wise object weights
         # (B*G*G, 1, H, W). These are glimpse size
-        importance_map = alpha_att_hat * 100.0 * torch.sigmoid(-z_depth.view(B*arch.G**2, 1, 1, 1))
+        importance_map = alpha_att_hat * 100.0 * torch.sigmoid(-z_depth.view(B * arch.G ** 2, 1, 1, 1))
         # (B*G*G, 1, H, W). These are of full resolution
         importance_map_full_res = spatial_transform(importance_map, z_where.view(B * arch.G ** 2, 4), (B*arch.G**2, 1, *arch.img_shape),
                                                     inverse=True)
@@ -317,6 +317,7 @@ class ImgEncoderFg(nn.Module):
         )
 
         # Image encoding -> latent distribution parameters (B, 128, G, G) -> (B, D, G, G)
+        # (chongyi zheng): scale_params = 2 (sx, sy), shift_params = 2 (tx, ty)
         # (chongyi zheng): two heads for gaussian
         self.z_scale_net = nn.Conv2d(128, (arch.z_where_scale_dim) * 2, 1)  # (B, 2 * 2, 8, 8)
         self.z_shift_net = nn.Conv2d(128, (arch.z_where_shift_dim) * 2, 1)  # (B, 2 * 2, 8, 8)
@@ -340,7 +341,7 @@ class ImgEncoderFg(nn.Module):
             z_depth: (B, G*G, 1)
             z_scale: (B, G*G, 2)
             z_shift: (B, G*G, 2)
-            z_where: (B, G*G, 4)
+            z_where: (B, G*G, 4) = concat([z_scale, z_shift], dim=-1)
             z_pres_logits: (B, G*G, 1)
             z_depth_post: Normal, (B, G*G, 1)
             z_scale_post: Normal, (B, G*G, 2)
@@ -349,11 +350,11 @@ class ImgEncoderFg(nn.Module):
         B = x.size(0)
         
         # (B, C, H, W)
-        img_enc = self.enc(x)
+        img_enc = self.enc(x)  # (B, C, 128, 128) -> (B, 128, 8, 8)
         # (B, E, G, G)
-        lateral_enc = self.enc_lat(img_enc)
+        lateral_enc = self.enc_lat(img_enc)  # (B, 128, 8, 8) -> (B, 128, 8, 8)
         # (B, 2E, G, G) -> (B, 128, H, W)
-        cat_enc = self.enc_cat(torch.cat((img_enc, lateral_enc), dim=1))
+        cat_enc = self.enc_cat(torch.cat((img_enc, lateral_enc), dim=1))  # (B, 128 + 128, 8, 8) -> (B, 128, 8, 8)
         
         def reshape(*args):
             """(B, D, G, G) -> (B, G*G, D)"""
@@ -367,7 +368,7 @@ class ImgEncoderFg(nn.Module):
         # Compute posteriors
         
         # (B, 1, G, G)
-        z_pres_logits = 8.8 * torch.tanh(self.z_pres_net(cat_enc))
+        z_pres_logits = 8.8 * torch.tanh(self.z_pres_net(cat_enc))  # (chongyi zheng): 8.8 is a magic number
         # (B, 1, G, G) - > (B, G*G, 1)
         z_pres_logits = reshape(z_pres_logits)
         z_pres_post = NumericalRelaxedBernoulli(logits=z_pres_logits, temperature=tau)
@@ -432,28 +433,29 @@ class ZWhatEnc(nn.Module):
         super(ZWhatEnc, self).__init__()
 
         # Glimpse Encoder
-        self.enc_cnn = nn.Sequential(  # (B, 3, 128, 128)
-            nn.Conv2d(3, 16, 3, 1, 1),
+        self.enc_cnn = nn.Sequential(  # (B * G * G, 3, 32, 32)
+            nn.Conv2d(3, 16, 3, 1, 1),  # (B * G * G, 16, 32, 32)
             nn.CELU(),
-            nn.GroupNorm(4, 16),  # (B, 16, 128, 128)
-            nn.Conv2d(16, 32, 4, 2, 1),
+            nn.GroupNorm(4, 16),
+            nn.Conv2d(16, 32, 4, 2, 1),  # (B * G * G, 32, 16, 16)
             nn.CELU(),
-            nn.GroupNorm(8, 32),  # (B, 32, 64, 64)
-            nn.Conv2d(32, 32, 3, 1, 1),
+            nn.GroupNorm(8, 32),
+            nn.Conv2d(32, 32, 3, 1, 1),  # (B * G * G, 32, 16, 16)
             nn.CELU(),
-            nn.GroupNorm(4, 32),  # (B, 32, 64, 64)
-            nn.Conv2d(32, 64, 4, 2, 1),
+            nn.GroupNorm(4, 32),
+            nn.Conv2d(32, 64, 4, 2, 1),  # (B * G * G, 64, 8, 8)
             nn.CELU(),
-            nn.GroupNorm(8, 64),  # (B, 64, 32, 32)
-            nn.Conv2d(64, 128, 4, 2, 1),
+            nn.GroupNorm(8, 64),
+            nn.Conv2d(64, 128, 4, 2, 1),  # (B * G * G, 128, 4, 4)
             nn.CELU(),
-            nn.GroupNorm(8, 128),  # (B, 128, 16, 16)
-            nn.Conv2d(128, 256, 4),
+            nn.GroupNorm(8, 128),
+            nn.Conv2d(128, 256, 4),  # (B * G * G, 256, 1, 1)
             nn.CELU(),
-            nn.GroupNorm(16, 256),  # (B, 256, 8, 8)
+            nn.GroupNorm(16, 256),
         )
-        
-        self.enc_what = nn.Linear(256, arch.z_what_dim * 2)  # (B, 32 * 2, 8, 8), Gaussian
+
+        # (B * G * G, 256, 1, 1) -> (B * G * G, 32 * 2, 1, 1), Gaussian
+        self.enc_what = nn.Linear(256, arch.z_what_dim * 2)
     
     def forward(self, x):
         """
@@ -467,6 +469,7 @@ class ZWhatEnc(nn.Module):
         x = self.enc_cnn(x)
         
         # (B, D), (B, D)
+        # (B * G * G, 32, 1, 1), (B * G * G, 32, 1, 1)
         z_what_mean, z_what_std = self.enc_what(x.flatten(start_dim=1)).chunk(2, -1)
         z_what_std = F.softplus(z_what_std)
         z_what_post = Normal(z_what_mean, z_what_std)
@@ -482,54 +485,54 @@ class GlimpseDec(nn.Module):
         super(GlimpseDec, self).__init__()
         
         # I am using really deep network here. But this is overkill
-        self.dec = nn.Sequential(  # (B, 32, 8, 8)
-            nn.Conv2d(arch.z_what_dim, 256, 1),  # (B, 256, 8, 8)
+        self.dec = nn.Sequential(  # (B * G * G, 32, 1, 1)
+            nn.Conv2d(arch.z_what_dim, 256, 1),  # (B * G * G, 256, 1, 1)
             nn.CELU(),
             nn.GroupNorm(16, 256),
-            nn.Conv2d(256, 128 * 2 * 2, 1),  # (B, 128 * 2 * 2, 8, 8)
-            nn.PixelShuffle(2),  # (B, 128, 16, 16)
+            nn.Conv2d(256, 128 * 2 * 2, 1),  # (B * G * G, 128 * 2 * 2, 1, 1)
+            nn.PixelShuffle(2),  # (B * G * G, 128, 2, 2)
             nn.CELU(),
             nn.GroupNorm(16, 128),
-            nn.Conv2d(128, 128, 3, 1, 1),  # (B, 128, 16, 16)
-            nn.CELU(),
-            nn.GroupNorm(16, 128),
-            
-            nn.Conv2d(128, 128 * 2 * 2, 1),  # (B, 128 * 2 * 2, 16, 16)
-            nn.PixelShuffle(2),  # (B, 128, 32, 32)
-            nn.CELU(),
-            nn.GroupNorm(16, 128),
-            nn.Conv2d(128, 128, 3, 1, 1),  # (B, 128, 32, 32)
+            nn.Conv2d(128, 128, 3, 1, 1),  # (B * G * G, 128, 2, 2)
             nn.CELU(),
             nn.GroupNorm(16, 128),
             
-            nn.Conv2d(128, 64 * 2 * 2, 1),  # (B, 64 * 2 * 2, 32, 32)
-            nn.PixelShuffle(2),  # (B, 64, 64, 64)
+            nn.Conv2d(128, 128 * 2 * 2, 1),  # (B * G * G, 128 * 2 * 2, 2, 2)
+            nn.PixelShuffle(2),  # (B * G * G, 128, 4, 4)
+            nn.CELU(),
+            nn.GroupNorm(16, 128),
+            nn.Conv2d(128, 128, 3, 1, 1),  # (B * G * G, 128, 4, 4)
+            nn.CELU(),
+            nn.GroupNorm(16, 128),
+            
+            nn.Conv2d(128, 64 * 2 * 2, 1),  # (B * G * G, 64 * 2 * 2, 4, 4)
+            nn.PixelShuffle(2),  # (B * G * G, 64, 8, 8)
             nn.CELU(),
             nn.GroupNorm(8, 64),
-            nn.Conv2d(64, 64, 3, 1, 1),  # (B, 64, 64, 64)
+            nn.Conv2d(64, 64, 3, 1, 1),  # (B * G * G, 64, 8, 8)
             nn.CELU(),
             nn.GroupNorm(8, 64),
             
-            nn.Conv2d(64, 32 * 2 * 2, 1),  # (B, 32 * 2 * 2, 64, 64)
-            nn.PixelShuffle(2),  # (B, 32, 128, 128)
+            nn.Conv2d(64, 32 * 2 * 2, 1),  # (B * G * G, 32 * 2 * 2, 8, 8)
+            nn.PixelShuffle(2),  # (B * G * G, 32, 16, 16)
             nn.CELU(),
             nn.GroupNorm(8, 32),
-            nn.Conv2d(32, 32, 3, 1, 1),  # (B, 32, 128, 128)
+            nn.Conv2d(32, 32, 3, 1, 1),  # (B * G * G, 32, 16, 16)
             nn.CELU(),
             nn.GroupNorm(8, 32),
             
-            nn.Conv2d(32, 16 * 2 * 2, 1),  # (B, 16 * 2 * 2, 128, 128)
-            nn.PixelShuffle(2),  # (B, 16, 256, 256)
+            nn.Conv2d(32, 16 * 2 * 2, 1),  # (B * G * G, 16 * 2 * 2, 16, 16)
+            nn.PixelShuffle(2),  # (B * G * G, 16, 32, 32)
             nn.CELU(),
             nn.GroupNorm(4, 16),
-            nn.Conv2d(16, 16, 3, 1, 1),  # (B, 16, 256, 256)
+            nn.Conv2d(16, 16, 3, 1, 1),  # (B * G * G, 16, 32, 32)
             nn.CELU(),
             nn.GroupNorm(4, 16),
         )
         
-        self.dec_o = nn.Conv2d(16, 3, 3, 1, 1)  # (B, 3, 256, 256)
+        self.dec_o = nn.Conv2d(16, 3, 3, 1, 1)  # (B * G * G, 3, 32, 32)
         
-        self.dec_alpha = nn.Conv2d(16, 1, 3, 1, 1)  # (B, 1, 256, 256)
+        self.dec_alpha = nn.Conv2d(16, 1, 3, 1, 1)  # (B * G * G, 1, 32, 32)
     
     def forward(self, x):
         """
@@ -540,10 +543,10 @@ class GlimpseDec(nn.Module):
             o_att: (B, 3, H, W)
             alpha_att: (B, 1, H, W)
         """
-        x = self.dec(x.view(x.size(0), -1, 1, 1))
-        
-        o = torch.sigmoid(self.dec_o(x))
-        alpha = torch.sigmoid(self.dec_alpha(x))
+        x = self.dec(x.view(x.size(0), -1, 1, 1))  # (B * G * G, 15, 32, 32)
+
+        o = torch.sigmoid(self.dec_o(x))  # (B * G * G, 3, 32, 32)
+        alpha = torch.sigmoid(self.dec_alpha(x))  # (B * G * G, 1, 32, 32)
         
         return o, alpha
 
