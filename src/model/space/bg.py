@@ -15,6 +15,7 @@ class SpaceBg(nn.Module):
         self.image_enc = ImageEncoderBg()
         
         # Compute mask hidden states given image features
+        # input_size = 32 + 64, hidden_size = 64)
         self.rnn_mask = nn.LSTMCell(arch.z_mask_dim + arch.img_enc_dim_bg, arch.rnn_mask_hidden_dim)
         self.rnn_mask_h = nn.Parameter(torch.zeros(arch.rnn_mask_hidden_dim))
         self.rnn_mask_c = nn.Parameter(torch.zeros(arch.rnn_mask_hidden_dim))
@@ -34,6 +35,7 @@ class SpaceBg(nn.Module):
             self.comp_decoder = CompDecoderStrong()
 
         # ==== Prior related ====
+        # input size = 32, hidden_size = 64
         self.rnn_mask_prior = nn.LSTMCell(arch.z_mask_dim, arch.rnn_mask_prior_hidden_dim)
         # Initial h and c
         self.rnn_mask_h_prior = nn.Parameter(torch.zeros(arch.rnn_mask_prior_hidden_dim))
@@ -79,8 +81,8 @@ class SpaceBg(nn.Module):
         c = self.rnn_mask_c.expand(B, arch.rnn_mask_hidden_dim)
         
         for i in range(arch.K):
-            # Encode x and z_{mask, 1:k}, (b, D)
-            rnn_input = torch.cat((z_mask, x_enc), dim=1)
+            # Encode x and z_{mask, 1:k}, (B, D)
+            rnn_input = torch.cat((z_mask, x_enc), dim=1)  # (B, 64) + (B, 32) -> (B, 96)
             (h, c) = self.rnn_mask(rnn_input, (h, c))
             
             # Predict next mask from x and z_{mask, 1:k-1}
@@ -173,7 +175,7 @@ class SpaceBg(nn.Module):
         log = {
             # (B, K, 3, H, W)
             'comps': comps,
-            # (B, 1, 3, H, W)
+            # (B, K, 1, H, W)
             'masks': masks,
             # (B, 3, H, W)
             'bg': bg,
@@ -185,7 +187,7 @@ class SpaceBg(nn.Module):
     @staticmethod
     def SBP(masks):
         """
-        Stick breaking process to produce masks
+        Stick breaking process to produce masks, deal with the occlusion problem
         :param: masks (B, K, 1, H, W). In range (0, 1)
         :return: (B, K, 1, H, W)
         """
@@ -220,22 +222,22 @@ class ImageEncoderBg(nn.Module):
     def __init__(self):
         embed_size = arch.img_shape[0] // 16
         nn.Module.__init__(self)
-        self.enc = nn.Sequential(
-            nn.Conv2d(3, 64, 3, 2, 1),
+        self.enc = nn.Sequential(  # (B, 3, 128, 128)
+            nn.Conv2d(3, 64, 3, 2, 1),  # (B, 64, 64, 64)
             nn.BatchNorm2d(64),
             nn.ELU(),
-            nn.Conv2d(64, 64, 3, 2, 1),
+            nn.Conv2d(64, 64, 3, 2, 1),  # (B, 64, 32, 32)
             nn.BatchNorm2d(64),
             nn.ELU(),
-            nn.Conv2d(64, 64, 3, 2, 1),
+            nn.Conv2d(64, 64, 3, 2, 1),  # (B, 64, 16, 16)
             nn.BatchNorm2d(64),
             nn.ELU(),
-            nn.Conv2d(64, 64, 3, 2, 1),
+            nn.Conv2d(64, 64, 3, 2, 1),  # (B, 64, 8, 8)
             nn.BatchNorm2d(64),
             nn.ELU(),
             # 16x downsampled: (64, H/16, W/16)
-            Flatten(),
-            nn.Linear(64 * embed_size ** 2, arch.img_enc_dim_bg),
+            Flatten(),  # (B, 64 * 8 * 8) = (B, 4096)
+            nn.Linear(64 * embed_size ** 2, arch.img_enc_dim_bg),  # (B, 64)
             nn.ELU(),
         )
     
@@ -257,7 +259,7 @@ class PredictMask(nn.Module):
     
     def __init__(self):
         nn.Module.__init__(self)
-        self.fc = nn.Linear(arch.rnn_mask_hidden_dim, arch.z_mask_dim * 2)
+        self.fc = nn.Linear(arch.rnn_mask_hidden_dim, arch.z_mask_dim * 2)  # (B, 64) -> (B, 32 * 2)
     
     def forward(self, h):
         """
@@ -269,7 +271,8 @@ class PredictMask(nn.Module):
             z_mask_scale: (B, D)
         
         """
-        x = self.fc(h)
+        # h_size = (B, 64)
+        x = self.fc(h)  # (B, 64) -> (B, 32 * 2)
         z_mask_loc = x[:, :arch.z_mask_dim]
         z_mask_scale = F.softplus(x[:, arch.z_mask_dim:]) + 1e-4
         
@@ -282,48 +285,47 @@ class MaskDecoder(nn.Module):
     def __init__(self):
         super(MaskDecoder, self).__init__()
         
-        self.dec = nn.Sequential(
-            nn.Conv2d(arch.z_mask_dim, 256, 1),
+        self.dec = nn.Sequential(  # (B, 32, 1, 1)
+            nn.Conv2d(arch.z_mask_dim, 256, 1),  # (B, 256, 1, 1)
             nn.CELU(),
             nn.GroupNorm(16, 256),
             
-            nn.Conv2d(256, 256 * 4 * 4, 1),
-            nn.PixelShuffle(4),
+            nn.Conv2d(256, 256 * 4 * 4, 1),  # (B, 256 * 4 * 4, 1, 1)
+            nn.PixelShuffle(4),  # (B, 256, 4, 4)
             nn.CELU(),
             nn.GroupNorm(16, 256),
-            nn.Conv2d(256, 256, 3, 1, 1),
+            nn.Conv2d(256, 256, 3, 1, 1),  # (B, 256, 4, 4)
             nn.CELU(),
             nn.GroupNorm(16, 256),
             
-            nn.Conv2d(256, 128 * 2 * 2, 1),
-            nn.PixelShuffle(2),
+            nn.Conv2d(256, 128 * 2 * 2, 1),  # (B, 128 * 2 * 2, 4, 4)
+            nn.PixelShuffle(2),  # (B, 128, 8, 8)
             nn.CELU(),
             nn.GroupNorm(16, 128),
-            nn.Conv2d(128, 128, 3, 1, 1),
+            nn.Conv2d(128, 128, 3, 1, 1),  # (B, 128, 8, 8)
             nn.CELU(),
             nn.GroupNorm(16, 128),
             
-            nn.Conv2d(128, 64 * 4 * 4, 1),
-            nn.PixelShuffle(4),
+            nn.Conv2d(128, 64 * 4 * 4, 1),  # (B, 64 * 4 * 4, 8, 8)
+            nn.PixelShuffle(4),  # (B, 64, 32, 32)
             nn.CELU(),
             nn.GroupNorm(8, 64),
-            nn.Conv2d(64, 64, 3, 1, 1),
+            nn.Conv2d(64, 64, 3, 1, 1),  # (B, 64, 32, 32)
             nn.CELU(),
             nn.GroupNorm(8, 64),
             
-            nn.Conv2d(64, 16 * 4 * 4, 1),
-            nn.PixelShuffle(4),
+            nn.Conv2d(64, 16 * 4 * 4, 1),  # (B, 16 * 4 * 4, 32, 32)
+            nn.PixelShuffle(4),  # (B, 16, 128, 128)
             nn.CELU(),
             nn.GroupNorm(4, 16),
-            nn.Conv2d(16, 16, 3, 1, 1),
+            nn.Conv2d(16, 16, 3, 1, 1),  # (B, 16, 128, 128)
             nn.CELU(),
             nn.GroupNorm(4, 16),
             
-            nn.Conv2d(16, 16, 3, 1, 1),
+            nn.Conv2d(16, 16, 3, 1, 1),  # (B, 16, 128, 128)
             nn.CELU(),
             nn.GroupNorm(4, 16),
-            nn.Conv2d(16, 1, 3, 1, 1)
-        
+            nn.Conv2d(16, 1, 3, 1, 1)  # (B, 1, 128, 128)
         )
     
     def forward(self, z_mask):
@@ -349,22 +351,22 @@ class CompEncoder(nn.Module):
         nn.Module.__init__(self)
         
         embed_size = arch.img_shape[0] // 16
-        self.enc = nn.Sequential(
-            nn.Conv2d(4, 32, 3, 2, 1),
+        self.enc = nn.Sequential(  # (B, 4, 128, 128)
+            nn.Conv2d(4, 32, 3, 2, 1),  # (B, 32, 64, 64)
             nn.BatchNorm2d(32),
             nn.ELU(),
-            nn.Conv2d(32, 32, 3, 2, 1),
+            nn.Conv2d(32, 32, 3, 2, 1),  # (B, 32, 32, 32)
             nn.BatchNorm2d(32),
             nn.ELU(),
-            nn.Conv2d(32, 64, 3, 2, 1),
+            nn.Conv2d(32, 64, 3, 2, 1),  # (B, 64, 16, 16)
             nn.BatchNorm2d(64),
             nn.ELU(),
-            nn.Conv2d(64, 64, 3, 2, 1),
+            nn.Conv2d(64, 64, 3, 2, 1),  # (B, 64, 8, 8)
             nn.BatchNorm2d(64),
             nn.ELU(),
-            Flatten(),
-            # 16x downsampled: (64, 4, 4)
-            nn.Linear(64 * embed_size ** 2, arch.z_comp_dim * 2),
+            # 16x downsampled: (64, H // 16, W // 16)
+            Flatten(),  # (B, 64 * 8 * 8) = (B, 4096)
+            nn.Linear(64 * embed_size ** 2, arch.z_comp_dim * 2),  # (B, 32 * 2) = (B, 64)
         )
     
     def forward(self, x):
@@ -428,21 +430,21 @@ class CompDecoder(nn.Module):
         nn.Module.__init__(self)
         self.spatial_broadcast = SpatialBroadcast()
         # Input will be (B, L+2, H, W)
-        self.decoder = nn.Sequential(
-            nn.Conv2d(arch.z_comp_dim + 2, 32, 3, 1),
+        self.decoder = nn.Sequential(  # (B, 32 + 2, 128, 128)
+            nn.Conv2d(arch.z_comp_dim + 2, 32, 3, 1),  # (B, 32, 126, 126)
             nn.BatchNorm2d(32),
             nn.ELU(),
-            nn.Conv2d(32, 32, 3, 1),
+            nn.Conv2d(32, 32, 3, 1),  # (B, 32, 124, 124)
             nn.BatchNorm2d(32),
             nn.ELU(),
-            nn.Conv2d(32, 32, 3, 1),
+            nn.Conv2d(32, 32, 3, 1),  # (B, 32, 122, 122)
             nn.BatchNorm2d(32),
             nn.ELU(),
-            nn.Conv2d(32, 32, 3, 1),
+            nn.Conv2d(32, 32, 3, 1),  # (B, 32, 120, 120)
             nn.BatchNorm2d(32),
             nn.ELU(),
             # 16x downsampled: (32, 4, 4)
-            nn.Conv2d(32, 3, 1, 1),
+            nn.Conv2d(32, 3, 1, 1),  # (B, 32, 120, 120)
         )
     
     def forward(self, z_comp):
@@ -527,11 +529,11 @@ class PredictComp(nn.Module):
     def __init__(self):
         nn.Module.__init__(self)
         self.mlp = nn.Sequential(
-            nn.Linear(arch.z_mask_dim, arch.predict_comp_hidden_dim),
+            nn.Linear(arch.z_mask_dim, arch.predict_comp_hidden_dim),  # (B, 32) -> (B, 64)
             nn.ELU(),
-            nn.Linear(arch.predict_comp_hidden_dim, arch.predict_comp_hidden_dim),
+            nn.Linear(arch.predict_comp_hidden_dim, arch.predict_comp_hidden_dim),  # (B, 64) -> (B, 64)
             nn.ELU(),
-            nn.Linear(arch.predict_comp_hidden_dim, arch.z_comp_dim * 2),
+            nn.Linear(arch.predict_comp_hidden_dim, arch.z_comp_dim * 2),  # (B, 64) -> (B, 32 * 2)
         )
     
     def forward(self, h):

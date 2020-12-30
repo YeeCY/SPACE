@@ -39,7 +39,7 @@ class SpaceFg(nn.Module):
         # self.register_buffer('prior_shift_mean_new', torch.tensor(0.))
         # self.register_buffer('prior_shift_std_new', torch.tensor(1.))
         
-        # TODO: These are placeholders for loading old checkpoints. No longer used
+        # TODO: These are placeholders for loading old checkpoints. No longer used (for the sake of restore)
         self.boundary_filter = get_boundary_kernel(sigma=20)
         self.register_buffer('prior_scale_mean',
                              torch.tensor([arch.z_scale_mean_start_value] * 2).view((arch.z_where_scale_dim), 1, 1))
@@ -274,53 +274,54 @@ class ImgEncoderFg(nn.Module):
         # Foreground Image Encoder in the paper
         # Encoder: (B, C, Himg, Wimg) -> (B, E, G, G)
         # G is H=W in the paper
-        self.enc = nn.Sequential(
+        self.enc = nn.Sequential(  # (B, 3, 128, 128)
             nn.Conv2d(3, 16, 4, 2, 1),
             nn.CELU(),
-            nn.GroupNorm(4, 16),
+            nn.GroupNorm(4, 16),  # (B, 16, 64, 64)
             nn.Conv2d(16, 32, 4, 2, 1),
             nn.CELU(),
-            nn.GroupNorm(8, 32),
+            nn.GroupNorm(8, 32),  # (B, 32, 32, 32)
             nn.Conv2d(32, 64, 4, 2, 1),
             nn.CELU(),
-            nn.GroupNorm(8, 64),
+            nn.GroupNorm(8, 64),  # (B, 64, 16, 16)
             nn.Conv2d(64, 128, 3, second_to_last_stride, 1),
             nn.CELU(),
-            nn.GroupNorm(16, 128),
+            nn.GroupNorm(16, 128),  # (B, 128, 16, 16)
             nn.Conv2d(128, 256, 3, last_stride, 1),
             nn.CELU(),
-            nn.GroupNorm(32, 256),
+            nn.GroupNorm(32, 256),  # (B, 256, 8, 8)
             nn.Conv2d(256, arch.img_enc_dim_fg, 1),
             nn.CELU(),
-            nn.GroupNorm(16, arch.img_enc_dim_fg)
+            nn.GroupNorm(16, arch.img_enc_dim_fg)  # (B, 128, 8, 8)
         )
         
         # Residual Connection in the paper
         # Remark: this residual connection is not important
         # Lateral connection (B, E, G, G) -> (B, E, G, G)
-        self.enc_lat = nn.Sequential(
+        self.enc_lat = nn.Sequential(  # (B, 128, 8, 8)
             nn.Conv2d(arch.img_enc_dim_fg, arch.img_enc_dim_fg, 3, 1, 1),
             nn.CELU(),
-            nn.GroupNorm(16, arch.img_enc_dim_fg),
+            nn.GroupNorm(16, arch.img_enc_dim_fg),  # (B, 128, 8, 8)
             nn.Conv2d(arch.img_enc_dim_fg, arch.img_enc_dim_fg, 3, 1, 1),
             nn.CELU(),
-            nn.GroupNorm(16, arch.img_enc_dim_fg)
+            nn.GroupNorm(16, arch.img_enc_dim_fg)  # (B, 128, 8, 8)
         )
         
         # Residual Encoder in the paper
         # Remark: also not important
         # enc + lateral -> enc (B, 2*E, G, G) -> (B, 128, G, G)
-        self.enc_cat = nn.Sequential(
+        self.enc_cat = nn.Sequential(  # (B, 128 * 2, 8, 8)
             nn.Conv2d(arch.img_enc_dim_fg * 2, 128, 3, 1, 1),
             nn.CELU(),
-            nn.GroupNorm(16, 128)
+            nn.GroupNorm(16, 128)  # (B, 128, 8, 8)
         )
-        
+
         # Image encoding -> latent distribution parameters (B, 128, G, G) -> (B, D, G, G)
-        self.z_scale_net = nn.Conv2d(128, (arch.z_where_scale_dim) * 2, 1)
-        self.z_shift_net = nn.Conv2d(128, (arch.z_where_shift_dim) * 2, 1)
-        self.z_pres_net = nn.Conv2d(128, arch.z_pres_dim, 1)
-        self.z_depth_net = nn.Conv2d(128, arch.z_depth_dim * 2, 1)
+        # (chongyi zheng): two heads for gaussian
+        self.z_scale_net = nn.Conv2d(128, (arch.z_where_scale_dim) * 2, 1)  # (B, 2 * 2, 8, 8)
+        self.z_shift_net = nn.Conv2d(128, (arch.z_where_shift_dim) * 2, 1)  # (B, 2 * 2, 8, 8)
+        self.z_pres_net = nn.Conv2d(128, arch.z_pres_dim, 1)  # (B, 1, 8, 8)
+        self.z_depth_net = nn.Conv2d(128, arch.z_depth_dim * 2, 1)  # (B, 1 * 2, 8, 8)
         
         # (G, G). Grid center offset. (offset_x[i, j], offset_y[i, j]) is the center for cell (i, j)
         offset_y, offset_x = torch.meshgrid([torch.arange(arch.G), torch.arange(arch.G)])
@@ -429,29 +430,30 @@ class ZWhatEnc(nn.Module):
     
     def __init__(self):
         super(ZWhatEnc, self).__init__()
-        
-        self.enc_cnn = nn.Sequential(
+
+        # Glimpse Encoder
+        self.enc_cnn = nn.Sequential(  # (B, 3, 128, 128)
             nn.Conv2d(3, 16, 3, 1, 1),
             nn.CELU(),
-            nn.GroupNorm(4, 16),
+            nn.GroupNorm(4, 16),  # (B, 16, 128, 128)
             nn.Conv2d(16, 32, 4, 2, 1),
             nn.CELU(),
-            nn.GroupNorm(8, 32),
+            nn.GroupNorm(8, 32),  # (B, 32, 64, 64)
             nn.Conv2d(32, 32, 3, 1, 1),
             nn.CELU(),
-            nn.GroupNorm(4, 32),
+            nn.GroupNorm(4, 32),  # (B, 32, 64, 64)
             nn.Conv2d(32, 64, 4, 2, 1),
             nn.CELU(),
-            nn.GroupNorm(8, 64),
+            nn.GroupNorm(8, 64),  # (B, 64, 32, 32)
             nn.Conv2d(64, 128, 4, 2, 1),
             nn.CELU(),
-            nn.GroupNorm(8, 128),
+            nn.GroupNorm(8, 128),  # (B, 128, 16, 16)
             nn.Conv2d(128, 256, 4),
             nn.CELU(),
-            nn.GroupNorm(16, 256),
+            nn.GroupNorm(16, 256),  # (B, 256, 8, 8)
         )
         
-        self.enc_what = nn.Linear(256, arch.z_what_dim * 2)
+        self.enc_what = nn.Linear(256, arch.z_what_dim * 2)  # (B, 32 * 2, 8, 8), Gaussian
     
     def forward(self, x):
         """
@@ -480,55 +482,54 @@ class GlimpseDec(nn.Module):
         super(GlimpseDec, self).__init__()
         
         # I am using really deep network here. But this is overkill
-        self.dec = nn.Sequential(
-            nn.Conv2d(arch.z_what_dim, 256, 1),
+        self.dec = nn.Sequential(  # (B, 32, 8, 8)
+            nn.Conv2d(arch.z_what_dim, 256, 1),  # (B, 256, 8, 8)
             nn.CELU(),
             nn.GroupNorm(16, 256),
-            
-            nn.Conv2d(256, 128 * 2 * 2, 1),
-            nn.PixelShuffle(2),
+            nn.Conv2d(256, 128 * 2 * 2, 1),  # (B, 128 * 2 * 2, 8, 8)
+            nn.PixelShuffle(2),  # (B, 128, 16, 16)
             nn.CELU(),
             nn.GroupNorm(16, 128),
-            nn.Conv2d(128, 128, 3, 1, 1),
-            nn.CELU(),
-            nn.GroupNorm(16, 128),
-            
-            nn.Conv2d(128, 128 * 2 * 2, 1),
-            nn.PixelShuffle(2),
-            nn.CELU(),
-            nn.GroupNorm(16, 128),
-            nn.Conv2d(128, 128, 3, 1, 1),
+            nn.Conv2d(128, 128, 3, 1, 1),  # (B, 128, 16, 16)
             nn.CELU(),
             nn.GroupNorm(16, 128),
             
-            nn.Conv2d(128, 64 * 2 * 2, 1),
-            nn.PixelShuffle(2),
+            nn.Conv2d(128, 128 * 2 * 2, 1),  # (B, 128 * 2 * 2, 16, 16)
+            nn.PixelShuffle(2),  # (B, 128, 32, 32)
+            nn.CELU(),
+            nn.GroupNorm(16, 128),
+            nn.Conv2d(128, 128, 3, 1, 1),  # (B, 128, 32, 32)
+            nn.CELU(),
+            nn.GroupNorm(16, 128),
+            
+            nn.Conv2d(128, 64 * 2 * 2, 1),  # (B, 64 * 2 * 2, 32, 32)
+            nn.PixelShuffle(2),  # (B, 64, 64, 64)
             nn.CELU(),
             nn.GroupNorm(8, 64),
-            nn.Conv2d(64, 64, 3, 1, 1),
+            nn.Conv2d(64, 64, 3, 1, 1),  # (B, 64, 64, 64)
             nn.CELU(),
             nn.GroupNorm(8, 64),
             
-            nn.Conv2d(64, 32 * 2 * 2, 1),
-            nn.PixelShuffle(2),
+            nn.Conv2d(64, 32 * 2 * 2, 1),  # (B, 32 * 2 * 2, 64, 64)
+            nn.PixelShuffle(2),  # (B, 32, 128, 128)
             nn.CELU(),
             nn.GroupNorm(8, 32),
-            nn.Conv2d(32, 32, 3, 1, 1),
+            nn.Conv2d(32, 32, 3, 1, 1),  # (B, 32, 128, 128)
             nn.CELU(),
             nn.GroupNorm(8, 32),
             
-            nn.Conv2d(32, 16 * 2 * 2, 1),
-            nn.PixelShuffle(2),
+            nn.Conv2d(32, 16 * 2 * 2, 1),  # (B, 16 * 2 * 2, 128, 128)
+            nn.PixelShuffle(2),  # (B, 16, 256, 256)
             nn.CELU(),
             nn.GroupNorm(4, 16),
-            nn.Conv2d(16, 16, 3, 1, 1),
+            nn.Conv2d(16, 16, 3, 1, 1),  # (B, 16, 256, 256)
             nn.CELU(),
             nn.GroupNorm(4, 16),
         )
         
-        self.dec_o = nn.Conv2d(16, 3, 3, 1, 1)
+        self.dec_o = nn.Conv2d(16, 3, 3, 1, 1)  # (B, 3, 256, 256)
         
-        self.dec_alpha = nn.Conv2d(16, 1, 3, 1, 1)
+        self.dec_alpha = nn.Conv2d(16, 1, 3, 1, 1)  # (B, 1, 256, 256)
     
     def forward(self, x):
         """

@@ -54,7 +54,7 @@ def train(cfg):
     
     writer = SummaryWriter(log_dir=os.path.join(cfg.logdir, cfg.exp_name), flush_secs=30, purge_step=global_step)
     vis_logger = get_vislogger(cfg)
-    metric_logger =  MetricLogger()
+    metric_logger = MetricLogger()
 
     print('Start training')
     end_flag = False
