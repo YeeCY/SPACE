@@ -3,6 +3,7 @@ from torchvision import transforms
 
 import numpy as np
 from PIL import ImageFile
+from skimage import io
 
 from fourrooms_env.envs.fourrooms import Fourrooms
 from fourrooms_env.envs.fourrooms_multicoin import FourroomsMultiCoin
@@ -24,7 +25,7 @@ class FourroomsDataset(Dataset):
         observations = []
         for s in range(num_state):
             env.reset(s)
-            obs = env.render()
+            obs = env.render(s)
             observations.append(obs)
         self.observations = np.array(observations)
 

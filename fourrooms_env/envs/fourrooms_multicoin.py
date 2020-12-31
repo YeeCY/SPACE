@@ -58,6 +58,7 @@ class FourroomsMultiCoin(FourroomsNorender):
     def reset(self, state=-1):
         # state = self.rng.choice(self.init_states)
         # self.viewer.close()
+        self.goal = np.random.randint(self.num_pos)
         self.done = False
         self.num_steps = 0
         if self.random_coin:
