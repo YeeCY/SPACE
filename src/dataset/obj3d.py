@@ -38,6 +38,8 @@ class Obj3D(Dataset):
     def __getitem__(self, index):
         img_path = self.img_paths[index]
         img = io.imread(img_path)[:, :, :3]
+        io.imshow(img)
+        io.show()
         transform = transforms.Compose([
             transforms.ToPILImage(),
             transforms.Resize(128),

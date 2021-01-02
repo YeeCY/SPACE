@@ -8,8 +8,6 @@ from skimage import io
 from fourrooms_env.envs.fourrooms import Fourrooms
 from fourrooms_env.envs.fourrooms_multicoin import FourroomsMultiCoin
 
-ImageFile.LOAD_TRUNCATED_IMAGES = True
-
 
 class FourroomsDataset(Dataset):
     def __init__(self, env):
@@ -26,6 +24,7 @@ class FourroomsDataset(Dataset):
         for s in range(num_state):
             env.reset(s)
             obs = env.render(s)
+            io.imsave("../images/{}.png".format(s), obs)
             observations.append(obs)
         self.observations = np.array(observations)
 

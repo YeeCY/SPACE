@@ -240,9 +240,10 @@ class FourroomsNorender(Fourrooms):
 """
         self.init_basic(max_epilen, goal)
         self.blocks = self.make_blocks()
-        self.origin_background = self.render_with_blocks(
-            255 * np.ones((self.obs_height, self.obs_width, 3), dtype=np.uint8),
-            self.blocks)
+        # (chongyi zheng): change background color
+        # self.origin_background = self.render_with_blocks(
+        #     255 * np.ones((self.obs_height, self.obs_width, 3), dtype=np.uint8),
+        #     self.blocks)
         self.agent_color = np.random.rand(100, 3)
         # print(self.background.shape)
 
@@ -275,6 +276,7 @@ class FourroomsNorender(Fourrooms):
         return background
 
     def make_blocks(self):
+        # (chongyi zheng): change background block color
         blocks = []
         size = self.block_size
         for i, row in enumerate(self.occupancy):
