@@ -244,6 +244,9 @@ class FourroomsNorender(Fourrooms):
         # self.origin_background = self.render_with_blocks(
         #     255 * np.ones((self.obs_height, self.obs_width, 3), dtype=np.uint8),
         #     self.blocks)
+        self.origin_background = self.render_with_blocks(
+            np.tile([245, 251, 187], [self.obs_height, self.obs_width, 1]).astype(np.uint8),  # light yellow
+            self.blocks)
         self.agent_color = np.random.rand(100, 3)
         # print(self.background.shape)
 
@@ -270,8 +273,10 @@ class FourroomsNorender(Fourrooms):
         assert background.shape[-1] == len(background.shape) == 3, background.shape
         for block in blocks:
             v, color = block
-            color = np.array(color).reshape(-1) * 255
-            background[v[0][0]:v[2][0], v[0][1]:v[2][1], :] = color.astype(np.uint8)
+            # (chongyi zheng): use uint color indicators
+            # color = np.array(color).reshape(-1) * 255
+            # background[v[0][0]:v[2][0], v[0][1]:v[2][1], :] = color.astype(np.uint8)
+            background[v[0][0]:v[2][0], v[0][1]:v[2][1], :] = np.array(color, dtype=np.uint8)
         # assert background.shape[-1] == len(background.shape) == 3,background.shape
         return background
 
@@ -284,7 +289,9 @@ class FourroomsNorender(Fourrooms):
                 if o == 1:
                     v = [[i * size, j * size], [i * size, (j + 1) * size], [(i + 1) * size, (j + 1) * size],
                          [(i + 1) * size, (j) * size]]
-                    color = (0, 0, 0)
+                    # color = (0, 0, 0)
+                    # color = (5, 255, 154)  # cyan
+                    color = (255, 94, 192)  # purple
                     geom = (v, color)
                     blocks.append(geom)
         return blocks

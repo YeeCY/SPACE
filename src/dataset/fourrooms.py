@@ -20,11 +20,15 @@ class FourroomsDataset(Dataset):
             num_state = env.observation_space.n
 
         # get observations
+        import matplotlib
+        matplotlib.use('TkAgg')
         observations = []
         for s in range(num_state):
             env.reset(s)
             obs = env.render(s)
-            io.imsave("../images/{}.png".format(s), obs)
+            # io.imshow(obs)
+            # io.show()
+            # io.imsave("../images/{}.png".format(s), obs)
             observations.append(obs)
         self.observations = np.array(observations)
 
@@ -38,6 +42,8 @@ class FourroomsDataset(Dataset):
             transforms.ToTensor(),
         ])
         img = transform(img)
+        # io.imshow((img.permute(1, 2, 0).numpy() * 255).astype(np.uint8))
+        # io.show()
 
         return img
 

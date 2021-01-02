@@ -80,14 +80,14 @@ class FourroomsMultiCoin(FourroomsNorender):
         for coin, count in self.coin_dict.items():
             x, y = self.tocell[coin]
             if count > 0:
-                blocks.append(self.make_block(x, y, (0, 1, 0)))
+                blocks.append(self.make_block(x, y, (51, 204, 51)))  # green - coins
 
         if self.currentcell[0] > 0:
             x, y = self.currentcell
-            blocks.append(self.make_block(x, y, (0, 0, 1)))
+            blocks.append(self.make_block(x, y, (51, 153, 255)))  # blue - agent
 
         x, y = self.tocell[self.goal]
-        blocks.append(self.make_block(x, y, (1, 0, 0)))
+        blocks.append(self.make_block(x, y, (255, 80, 80)))  # red - goal
         # self.viewer.
         arr = self.render_with_blocks(self.origin_background, blocks)
 

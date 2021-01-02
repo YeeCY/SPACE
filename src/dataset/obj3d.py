@@ -17,8 +17,7 @@ class Obj3D(Dataset):
         self.root = root
         self.mode = mode
         assert os.path.exists(root), 'Path {} does not exist'.format(root)
-        
-        
+
         self.img_paths = []
         img_dir = os.path.join(self.root, mode)
         for file in os.scandir(img_dir):
@@ -38,15 +37,13 @@ class Obj3D(Dataset):
     def __getitem__(self, index):
         img_path = self.img_paths[index]
         img = io.imread(img_path)[:, :, :3]
-        io.imshow(img)
-        io.show()
         transform = transforms.Compose([
             transforms.ToPILImage(),
             transforms.Resize(128),
             transforms.ToTensor(),
         ])
         img = transform(img)
-        
+
         return img
     
     def __len__(self):
