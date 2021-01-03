@@ -37,10 +37,10 @@ arch:
   G: 8
   fg_sigma: 0.15
 
-  z_pres_start_step: 4000
-  z_pres_end_step: 10000
+  z_pres_start_step: 0
+  z_pres_end_step: 50000
   z_pres_start_value: 0.1
-  z_pres_end_value: 0.01
+  z_pres_end_value: 1e-3
 
   z_scale_mean_start_step: 10000
   z_scale_mean_end_step: 20000
@@ -53,7 +53,7 @@ arch:
   tau_end_value: 0.5
 
   fix_alpha_steps: 0
-  fix_alpha_value: 0.1
+  fix_alpha_value: 0.15
 
   K: 5
   bg_sigma: 0.15

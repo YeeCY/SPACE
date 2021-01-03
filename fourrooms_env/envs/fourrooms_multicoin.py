@@ -80,14 +80,28 @@ class FourroomsMultiCoin(FourroomsNorender):
         for coin, count in self.coin_dict.items():
             x, y = self.tocell[coin]
             if count > 0:
-                blocks.append(self.make_block(x, y, (51, 204, 51)))  # green - coins
+                # blocks.append(self.make_block(x, y, (51, 204, 51)))  # green - coins
+                blocks.append(self.make_block(x, y, (0, 255, 0)))  # green - coins
+                # color = np.random.randint(0, 190) * np.ones(3, dtype=np.uint8)
+                # color[1] = 255
+                # blocks.append(self.make_block(x, y, color))  # green - coins
+                # blocks.append(self.make_block(x, y, np.random.randint(0, 255, 3)))
 
         if self.currentcell[0] > 0:
             x, y = self.currentcell
-            blocks.append(self.make_block(x, y, (51, 153, 255)))  # blue - agent
+            # blocks.append(self.make_block(x, y, (51, 153, 255)))  # blue - agent
+            blocks.append(self.make_block(x, y, (0, 0, 255)))  # blue - agent
+            # color = np.random.randint(0, 190) * np.ones(3, dtype=np.uint8)
+            # color[2] = 255
+            # blocks.append(self.make_block(x, y, color))  # blue - agent
+            # blocks.append(self.make_block(x, y, np.random.randint(0, 255, 3)))
 
         x, y = self.tocell[self.goal]
-        blocks.append(self.make_block(x, y, (255, 80, 80)))  # red - goal
+        # blocks.append(self.make_block(x, y, (255, 80, 80)))  # red - goal
+        blocks.append(self.make_block(x, y, (255, 0, 0)))  # red - goal
+        # color = np.random.randint(0, 190) * np.ones(3, dtype=np.uint8)
+        # color[0] = 255
+        # blocks.append(self.make_block(x, y, color))
         # self.viewer.
         arr = self.render_with_blocks(self.origin_background, blocks)
 

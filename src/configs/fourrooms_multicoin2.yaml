@@ -16,9 +16,9 @@ dataset_roots:
 
 # For engine.train
 train:
-  batch_size: 12
-  max_epochs: 2000
-  max_steps: 160000
+  batch_size: 32
+  max_epochs: 5000
+  max_steps: 1000000
   print_every: 500
   save_every: 1000
   num_workers: 4
@@ -37,15 +37,15 @@ arch:
   G: 8
   fg_sigma: 0.15
 
-  z_pres_start_step: 4000
+  z_pres_start_step: 0
   z_pres_end_step: 10000
   z_pres_start_value: 0.1
   z_pres_end_value: 0.01
 
   z_scale_mean_start_step: 10000
   z_scale_mean_end_step: 20000
-  z_scale_mean_start_value: -1.0
-  z_scale_mean_end_value: -2.0
+  z_scale_mean_start_value: -1.5
+  z_scale_mean_end_value: -2.5
 
   tau_start_step: 0
   tau_end_step: 20000

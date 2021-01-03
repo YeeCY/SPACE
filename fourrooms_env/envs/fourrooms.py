@@ -241,12 +241,12 @@ class FourroomsNorender(Fourrooms):
         self.init_basic(max_epilen, goal)
         self.blocks = self.make_blocks()
         # (chongyi zheng): change background color
-        # self.origin_background = self.render_with_blocks(
-        #     255 * np.ones((self.obs_height, self.obs_width, 3), dtype=np.uint8),
-        #     self.blocks)
         self.origin_background = self.render_with_blocks(
-            np.tile([245, 251, 187], [self.obs_height, self.obs_width, 1]).astype(np.uint8),  # light yellow
+            255 * np.ones((self.obs_height, self.obs_width, 3), dtype=np.uint8),
             self.blocks)
+        # self.origin_background = self.render_with_blocks(
+        #     np.tile([255, 255, 255], [self.obs_height, self.obs_width, 1]).astype(np.uint8),  # light yellow
+        #     self.blocks)
         self.agent_color = np.random.rand(100, 3)
         # print(self.background.shape)
 
@@ -289,9 +289,9 @@ class FourroomsNorender(Fourrooms):
                 if o == 1:
                     v = [[i * size, j * size], [i * size, (j + 1) * size], [(i + 1) * size, (j + 1) * size],
                          [(i + 1) * size, (j) * size]]
-                    # color = (0, 0, 0)
+                    color = (0, 0, 0)  # black
                     # color = (5, 255, 154)  # cyan
-                    color = (255, 94, 192)  # purple
+                    # color = (255, 94, 192)  # purple
                     geom = (v, color)
                     blocks.append(geom)
         return blocks

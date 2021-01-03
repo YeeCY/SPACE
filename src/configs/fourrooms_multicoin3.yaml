@@ -18,7 +18,7 @@ dataset_roots:
 train:
   batch_size: 12
   max_epochs: 2000
-  max_steps: 160000
+  max_steps: 320000
   print_every: 500
   save_every: 1000
   num_workers: 4
@@ -55,7 +55,7 @@ arch:
   fix_alpha_steps: 0
   fix_alpha_value: 0.1
 
-  K: 5
+  K: 4
   bg_sigma: 0.15
 
   boundary_loss: true
