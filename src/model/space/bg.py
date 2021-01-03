@@ -295,33 +295,33 @@ class MaskDecoder(nn.Module):
             nn.PixelShuffle(4),  # (B, 256, 4, 4)
             nn.CELU(),
             nn.GroupNorm(16, 256),
-            nn.Conv2d(256, 256, 3, 1, 1),  # (B, 256, 4, 4)
-            nn.CELU(),
-            nn.GroupNorm(16, 256),
+            # nn.Conv2d(256, 256, 3, 1, 1),  # (B, 256, 4, 4)
+            # nn.CELU(),
+            # nn.GroupNorm(16, 256),
             
             nn.Conv2d(256, 128 * 2 * 2, 1),  # (B, 128 * 2 * 2, 4, 4)
             nn.PixelShuffle(2),  # (B, 128, 8, 8)
             nn.CELU(),
             nn.GroupNorm(16, 128),
-            nn.Conv2d(128, 128, 3, 1, 1),  # (B, 128, 8, 8)
-            nn.CELU(),
-            nn.GroupNorm(16, 128),
+            # nn.Conv2d(128, 128, 3, 1, 1),  # (B, 128, 8, 8)
+            # nn.CELU(),
+            # nn.GroupNorm(16, 128),
             
             nn.Conv2d(128, 64 * 4 * 4, 1),  # (B, 64 * 4 * 4, 8, 8)
             nn.PixelShuffle(4),  # (B, 64, 32, 32)
             nn.CELU(),
             nn.GroupNorm(8, 64),
-            nn.Conv2d(64, 64, 3, 1, 1),  # (B, 64, 32, 32)
-            nn.CELU(),
-            nn.GroupNorm(8, 64),
+            # nn.Conv2d(64, 64, 3, 1, 1),  # (B, 64, 32, 32)
+            # nn.CELU(),
+            # nn.GroupNorm(8, 64),
             
             nn.Conv2d(64, 16 * 4 * 4, 1),  # (B, 16 * 4 * 4, 32, 32)
             nn.PixelShuffle(4),  # (B, 16, 128, 128)
             nn.CELU(),
             nn.GroupNorm(4, 16),
-            nn.Conv2d(16, 16, 3, 1, 1),  # (B, 16, 128, 128)
-            nn.CELU(),
-            nn.GroupNorm(4, 16),
+            # nn.Conv2d(16, 16, 3, 1, 1),  # (B, 16, 128, 128)
+            # nn.CELU(),
+            # nn.GroupNorm(4, 16),
             
             nn.Conv2d(16, 16, 3, 1, 1),  # (B, 16, 128, 128)
             nn.CELU(),

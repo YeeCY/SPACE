@@ -298,23 +298,23 @@ class ImgEncoderFg(nn.Module):
         # Residual Connection in the paper
         # Remark: this residual connection is not important
         # Lateral connection (B, E, G, G) -> (B, E, G, G)
-        self.enc_lat = nn.Sequential(  # (B, 128, 8, 8)
-            nn.Conv2d(arch.img_enc_dim_fg, arch.img_enc_dim_fg, 3, 1, 1),
-            nn.CELU(),
-            nn.GroupNorm(16, arch.img_enc_dim_fg),  # (B, 128, 8, 8)
-            nn.Conv2d(arch.img_enc_dim_fg, arch.img_enc_dim_fg, 3, 1, 1),
-            nn.CELU(),
-            nn.GroupNorm(16, arch.img_enc_dim_fg)  # (B, 128, 8, 8)
-        )
+        # self.enc_lat = nn.Sequential(  # (B, 128, 8, 8)
+        #     nn.Conv2d(arch.img_enc_dim_fg, arch.img_enc_dim_fg, 3, 1, 1),
+        #     nn.CELU(),
+        #     nn.GroupNorm(16, arch.img_enc_dim_fg),  # (B, 128, 8, 8)
+        #     nn.Conv2d(arch.img_enc_dim_fg, arch.img_enc_dim_fg, 3, 1, 1),
+        #     nn.CELU(),
+        #     nn.GroupNorm(16, arch.img_enc_dim_fg)  # (B, 128, 8, 8)
+        # )
         
         # Residual Encoder in the paper
         # Remark: also not important
         # enc + lateral -> enc (B, 2*E, G, G) -> (B, 128, G, G)
-        self.enc_cat = nn.Sequential(  # (B, 128 * 2, 8, 8)
-            nn.Conv2d(arch.img_enc_dim_fg * 2, 128, 3, 1, 1),
-            nn.CELU(),
-            nn.GroupNorm(16, 128)  # (B, 128, 8, 8)
-        )
+        # self.enc_cat = nn.Sequential(  # (B, 128 * 2, 8, 8)
+        #     nn.Conv2d(arch.img_enc_dim_fg * 2, 128, 3, 1, 1),
+        #     nn.CELU(),
+        #     nn.GroupNorm(16, 128)  # (B, 128, 8, 8)
+        # )
 
         # Image encoding -> latent distribution parameters (B, 128, G, G) -> (B, D, G, G)
         # (chongyi zheng): scale_params = 2 (sx, sy), shift_params = 2 (tx, ty)
@@ -351,10 +351,10 @@ class ImgEncoderFg(nn.Module):
         
         # (B, C, H, W)
         img_enc = self.enc(x)  # (B, C, 128, 128) -> (B, 128, 8, 8)
-        # (B, E, G, G)
-        lateral_enc = self.enc_lat(img_enc)  # (B, 128, 8, 8) -> (B, 128, 8, 8)
-        # (B, 2E, G, G) -> (B, 128, H, W)
-        cat_enc = self.enc_cat(torch.cat((img_enc, lateral_enc), dim=1))  # (B, 128 + 128, 8, 8) -> (B, 128, 8, 8)
+        # # (B, E, G, G)
+        # lateral_enc = self.enc_lat(img_enc)  # (B, 128, 8, 8) -> (B, 128, 8, 8)
+        # # (B, 2E, G, G) -> (B, 128, H, W)
+        # cat_enc = self.enc_cat(torch.cat((img_enc, lateral_enc), dim=1))  # (B, 128 + 128, 8, 8) -> (B, 128, 8, 8)
         
         def reshape(*args):
             """(B, D, G, G) -> (B, G*G, D)"""
@@ -368,7 +368,7 @@ class ImgEncoderFg(nn.Module):
         # Compute posteriors
         
         # (B, 1, G, G)
-        z_pres_logits = 8.8 * torch.tanh(self.z_pres_net(cat_enc))  # (chongyi zheng): 8.8 is a magic number
+        z_pres_logits = 8.8 * torch.tanh(self.z_pres_net(img_enc))  # (chongyi zheng): 8.8 is a magic number
         # (B, 1, G, G) - > (B, G*G, 1)
         z_pres_logits = reshape(z_pres_logits)
         z_pres_post = NumericalRelaxedBernoulli(logits=z_pres_logits, temperature=tau)
@@ -378,7 +378,7 @@ class ImgEncoderFg(nn.Module):
         z_pres = torch.sigmoid(z_pres_y)
         
         # (B, 1, G, G)
-        z_depth_mean, z_depth_std = self.z_depth_net(cat_enc).chunk(2, 1)
+        z_depth_mean, z_depth_std = self.z_depth_net(img_enc).chunk(2, 1)
         # (B, 1, G, G) -> (B, G*G, 1)
         z_depth_mean, z_depth_std = reshape(z_depth_mean, z_depth_std)
         z_depth_std = F.softplus(z_depth_std)
@@ -388,7 +388,7 @@ class ImgEncoderFg(nn.Module):
         
         # (B, 2, G, G)
         scale_std_bias = 1e-15
-        z_scale_mean, _z_scale_std = self.z_scale_net(cat_enc).chunk(2, 1)
+        z_scale_mean, _z_scale_std = self.z_scale_net(img_enc).chunk(2, 1)
         z_scale_std = F.softplus(_z_scale_std) + scale_std_bias
         # (B, 2, G, G) -> (B, G*G, 2)
         z_scale_mean, z_scale_std = reshape(z_scale_mean, z_scale_std)
@@ -396,7 +396,7 @@ class ImgEncoderFg(nn.Module):
         z_scale = z_scale_post.rsample()
         
         # (B, 2, G, G)
-        z_shift_mean, z_shift_std = self.z_shift_net(cat_enc).chunk(2, 1)
+        z_shift_mean, z_shift_std = self.z_shift_net(img_enc).chunk(2, 1)
         z_shift_std = F.softplus(z_shift_std)
         # (B, 2, G, G) -> (B, G*G, 2)
         z_shift_mean, z_shift_std = reshape(z_shift_mean, z_shift_std)
@@ -440,9 +440,9 @@ class ZWhatEnc(nn.Module):
             nn.Conv2d(16, 32, 4, 2, 1),  # (B * G * G, 32, 16, 16)
             nn.CELU(),
             nn.GroupNorm(8, 32),
-            nn.Conv2d(32, 32, 3, 1, 1),  # (B * G * G, 32, 16, 16)
-            nn.CELU(),
-            nn.GroupNorm(4, 32),
+            # nn.Conv2d(32, 32, 3, 1, 1),  # (B * G * G, 32, 16, 16)
+            # nn.CELU(),
+            # nn.GroupNorm(4, 32),
             nn.Conv2d(32, 64, 4, 2, 1),  # (B * G * G, 64, 8, 8)
             nn.CELU(),
             nn.GroupNorm(8, 64),
@@ -493,41 +493,41 @@ class GlimpseDec(nn.Module):
             nn.PixelShuffle(2),  # (B * G * G, 128, 2, 2)
             nn.CELU(),
             nn.GroupNorm(16, 128),
-            nn.Conv2d(128, 128, 3, 1, 1),  # (B * G * G, 128, 2, 2)
-            nn.CELU(),
-            nn.GroupNorm(16, 128),
+            # nn.Conv2d(128, 128, 3, 1, 1),  # (B * G * G, 128, 2, 2)
+            # nn.CELU(),
+            # nn.GroupNorm(16, 128),
             
             nn.Conv2d(128, 128 * 2 * 2, 1),  # (B * G * G, 128 * 2 * 2, 2, 2)
             nn.PixelShuffle(2),  # (B * G * G, 128, 4, 4)
             nn.CELU(),
             nn.GroupNorm(16, 128),
-            nn.Conv2d(128, 128, 3, 1, 1),  # (B * G * G, 128, 4, 4)
-            nn.CELU(),
-            nn.GroupNorm(16, 128),
+            # nn.Conv2d(128, 128, 3, 1, 1),  # (B * G * G, 128, 4, 4)
+            # nn.CELU(),
+            # nn.GroupNorm(16, 128),
             
             nn.Conv2d(128, 64 * 2 * 2, 1),  # (B * G * G, 64 * 2 * 2, 4, 4)
             nn.PixelShuffle(2),  # (B * G * G, 64, 8, 8)
             nn.CELU(),
             nn.GroupNorm(8, 64),
-            nn.Conv2d(64, 64, 3, 1, 1),  # (B * G * G, 64, 8, 8)
-            nn.CELU(),
-            nn.GroupNorm(8, 64),
+            # nn.Conv2d(64, 64, 3, 1, 1),  # (B * G * G, 64, 8, 8)
+            # nn.CELU(),
+            # nn.GroupNorm(8, 64),
             
             nn.Conv2d(64, 32 * 2 * 2, 1),  # (B * G * G, 32 * 2 * 2, 8, 8)
             nn.PixelShuffle(2),  # (B * G * G, 32, 16, 16)
             nn.CELU(),
             nn.GroupNorm(8, 32),
-            nn.Conv2d(32, 32, 3, 1, 1),  # (B * G * G, 32, 16, 16)
-            nn.CELU(),
-            nn.GroupNorm(8, 32),
+            # nn.Conv2d(32, 32, 3, 1, 1),  # (B * G * G, 32, 16, 16)
+            # nn.CELU(),
+            # nn.GroupNorm(8, 32),
             
             nn.Conv2d(32, 16 * 2 * 2, 1),  # (B * G * G, 16 * 2 * 2, 16, 16)
             nn.PixelShuffle(2),  # (B * G * G, 16, 32, 32)
             nn.CELU(),
             nn.GroupNorm(4, 16),
-            nn.Conv2d(16, 16, 3, 1, 1),  # (B * G * G, 16, 32, 32)
-            nn.CELU(),
-            nn.GroupNorm(4, 16),
+            # nn.Conv2d(16, 16, 3, 1, 1),  # (B * G * G, 16, 32, 32)
+            # nn.CELU(),
+            # nn.GroupNorm(4, 16),
         )
         
         self.dec_o = nn.Conv2d(16, 3, 3, 1, 1)  # (B * G * G, 3, 32, 32)
