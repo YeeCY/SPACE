@@ -23,13 +23,14 @@ class FourroomsDataset(Dataset):
         import matplotlib
         matplotlib.use('TkAgg')
         observations = []
-        for s in range(num_state):
-            env.reset(s)
-            obs = env.render(s)
-            # io.imshow(obs)
-            # io.show()
-            # io.imsave("../images/{}.png".format(s), obs)
-            observations.append(obs)
+        for _ in range(20):
+            for s in range(num_state):
+                env.reset(s)
+                obs = env.render(s)
+                # io.imshow(obs)
+                # io.show()
+                # io.imsave("../images/{}.png".format(s), obs)
+                observations.append(obs)
         self.observations = np.array(observations)
 
     def __getitem__(self, index):

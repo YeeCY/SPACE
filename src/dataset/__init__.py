@@ -1,6 +1,7 @@
 from .atari import Atari
 from .obj3d import Obj3D
 from .fourrooms import Fourrooms, FourroomsMultiCoin, FourroomsDataset
+from .o2p2 import O2P2
 from torch.utils.data import DataLoader
 
 
@@ -18,6 +19,10 @@ def get_dataset(cfg, mode):
     elif cfg.dataset == 'FOURROOMS_MULTICOIN':
         env = FourroomsMultiCoin(random_coin=True)
         return FourroomsDataset(env)
+    elif cfg.dataset == 'O2P2':
+        return O2P2(cfg.dataset_roots.O2P2, mode)
+    else:
+        raise TypeError("Invalid dataset!")
 
 def get_dataloader(cfg, mode):
     assert mode in ['train', 'val', 'test']

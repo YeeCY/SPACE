@@ -29,6 +29,7 @@ cfg = CfgNode({
         'OBJ3D_LARGE': '../data/OBJ3D_LARGE',
         'OBJ3D_SMALL': '../data/OBJ3D_SMALL',
         'FOURROOMS_MULTICOIN': '',
+        'O2P2': '../data/O2P2',
     },
     
     # For Atari
